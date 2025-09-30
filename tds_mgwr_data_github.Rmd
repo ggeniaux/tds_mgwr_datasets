@@ -1,0 +1,535 @@
+---
+title: "datasets for article : Top-Down Scale Approaches for Multiscale GWR with Locally Adaptive Bandwidths"
+author: "Ghislain Geniaux"
+date: "2025-30-09"
+output: html_document
+---
+
+First, Intall R, Rstudio and Python if necessary
+
+Then, using a terminal console, install this environement and libraries : 
+
+conda create  --name py3.12 python=3.12
+conda install --name py3.12 pandas
+conda install --name py3.12 numpy
+conda install --name py3.12 geopandas
+conda install --name py3.12 pysal
+conda install --name py3.12 libpysal
+conda install --name py3.12 mgwr
+
+Theses series of python and R chunk allow to download data from PYSAL. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reticulate)
+use_condaenv("py3.12")
+library(dplyr)
+```
+
+```{python}
+import numpy as np
+import pandas as pd
+import geopandas as gpd
+import pysal as ps
+import libpysal as lps
+from libpysal.examples import get_path 
+from libpysal.examples import explain
+from libpysal.examples import load_example
+```
+
+```{python}
+berlin = load_example('berlin')
+prenz = gpd.read_file(lps.examples.get_path('prenzlauer.zip'))
+```
+
+```{python berlin}
+explain('berlin')
+prenz = pd.read_csv('/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/prenzlauer.csv')
+b_y = np.log(prenz['price'].values.astype(float).reshape((-1, 1)))
+b_X = prenz[['review_scores_rating','bedrooms','bathrooms','beds','accommodates']].values.astype(float) 
+b_X = (b_X - b_X.mean(axis=0)) / b_X.std(axis=0)
+b_Y = (b_y - b_y.mean(axis=0)) / b_y.std(axis=0)
+b_coords =  prenz[['X','Y']]
+```
+
+```{python georgia}
+explain('georgia')
+data = pd.read_csv(lps.examples.get_path('GData_utm.csv'))
+u = data['X']
+v = data['Y']
+g_coords=data[['X','Y']]
+#g_coords = list(zip(u,v))
+g_Y = data['PctBach'].values.astype(float).reshape((-1, 1))
+g_X = data[["PctBlack", "PctFB", "PctEld", "TotPop90"]].values.astype(float) 
+g_X = (g_X-g_X.mean(axis=0))/g_X.std(axis=0)
+g_Y = (g_Y-g_Y.mean(axis=0))/g_Y.std(axis=0)
+```
+```{python clearwater binomial}
+explain('clearwater')
+data_p = pd.read_csv(lps.examples.get_path('landslides.csv'))
+c_coords=data_p[['X','Y']]
+c_Y = np.array(data_p['Landslid'].values.astype(float)).reshape((-1, 1))
+c_X = data_p[["Elev", "Slope", "SinAspct", "CosAspct", "AbsSouth", "DistStrm"]].values.astype(float)
+c_X = (c_X-c_X.mean(axis=0))/c_X.std(axis=0)
+c_Y = (c_Y-c_Y.mean(axis=0))/c_Y.std(axis=0)
+```
+
+```{python tokyo}
+explain('tokyo')
+tokyo = pd.read_csv(lps.examples.get_path('Tokyomortality.csv'))
+t_coords =tokyo[['X_CENTROID','Y_CENTROID']]
+t_Y = np.array(tokyo['db2564'].values.astype(float)).reshape((-1, 1))
+t_X= tokyo[["eb2564", "OCC_TEC", "OWNH", "POP65", "UNEMP"]].values.astype(float)
+t_X = (t_X-t_X.mean(axis=0))/t_X.std(axis=0)
+t_Y = (t_Y-t_Y.mean(axis=0))/t_Y.std(axis=0)
+```
+
+```{python kc_house_data.csv}
+data = pd.read_csv("/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/kc_house_data.csv")
+data = data[data["yr_renovated"] == 0]
+data = data[data["waterfront"] == 0]
+data = data[data["view"] < 1]
+categories = ['price', 'bedrooms', 'bathrooms', 'sqft_living',
+              'sqft_lot', 'floors', 'condition', 'grade', 'yr_built',
+              'lat', 'long']
+data = data[categories]
+data['yr_built']= data['yr_built'] -data['yr_built'].min()
+data['sqft_living']=np.log(data['sqft_living'].values.astype(float).reshape((-1, 1)))
+data['sqft_lot']=np.log(data['sqft_lot'].values.astype(float).reshape((-1, 1)))
+nan_indexes = []
+for category in categories:
+    nan_indexes.extend(np.where(np.isnan(data[category]))[0])
+nan_indexes = np.asarray(nan_indexes)
+nan_indexes = np.unique(nan_indexes)
+data = data.drop(data.index[nan_indexes.tolist()])
+k_coords =data[['lat','long']]
+k_Y = np.log(data['price'].values.reshape((-1, 1)))
+data = data.drop(columns=['price', 'lat', 'long'])
+k_X = data.values
+k_X = (k_X-k_X.mean(axis=0))/k_X.std(axis=0)
+k_Y = (k_Y-k_Y.mean(axis=0))/k_Y.std(axis=0)
+```
+
+```{python airbnb}
+airbnb = pd.read_csv("/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/AB_NYC_2019.csv")
+print(airbnb.shape, airbnb.keys())
+airbnb.drop(['name', 'host_id', 'id', 'neighbourhood_group', 'neighbourhood', 'host_name', 'last_review'], axis=1, inplace=True)
+categories = airbnb.keys()
+
+print("number of rows with atleast one missing value:", sum(airbnb.apply(lambda x: sum(x.isnull().values), axis = 1)>0))
+airbnb.isnull().sum()
+airbnb.dropna(how='any', inplace=True)
+print('shape', airbnb.shape)
+
+airbnb = pd.concat([airbnb, pd.get_dummies(airbnb['room_type'], prefix='')],axis=1)
+airbnb.drop(['room_type'], axis=1, inplace=True)
+airbnb = airbnb[np.log1p(airbnb['price']) < 8]
+airbnb = airbnb[np.log1p(airbnb['price']) > 3]
+
+airbnb['_Private room']=np.multiply(airbnb['_Private room'], 1)
+airbnb['_Shared room']=np.multiply(airbnb['_Shared room'], 1)
+airbnb['_Entire home/apt']=np.multiply(airbnb['_Entire home/apt'], 1)
+airbnb['price'] = np.log1p(airbnb['price'])
+print('shape', airbnb.shape)
+a_coords=airbnb[['latitude','longitude']]
+a_Y = airbnb['price'].values.reshape((-1, 1))
+data = airbnb.drop(columns=['price', 'latitude', 'longitude'])
+a_X = data.values
+a_X = (a_X-a_X.mean(axis=0))/a_X.std(axis=0)
+a_Y = (a_Y-a_Y.mean(axis=0))/a_Y.std(axis=0)
+```
+```{r dvf}
+load('my_dataf.Rdata')
+my_dataf<-my_dataf %>% dplyr::filter(anneemut<=2019)
+my_dataf$Q2=as.numeric(my_dataf$moismut %in% 4:6)
+my_dataf$Q3=as.numeric(my_dataf$moismut %in% 7:9)
+my_dataf$Q4=as.numeric(my_dataf$moismut %in% 10:12)
+
+d_coords<-my_dataf[,c('x','y')]
+d_Y<-my_dataf[,c('log_valeur_fonc')]
+d_X<-my_dataf[,c( "anneemut",'Q2','Q3','Q4',"sbati","sterr","sbati_2","sbati_3","sterr_2","sterr_3","nosterr","ffnbppiscin","ffsdep","nbpprincn" )]
+d_Xd<-my_dataf[,c("log_av45","dist_F313","dist_D240","dist_D238","dist_A129","dist_D242")]
+
+```
+
+```{r savedata}
+a_Y<-py$a_Y
+b_Y<-py$b_Y
+c_Y<-py$c_Y
+g_Y<-py$g_Y
+k_Y<-py$k_Y
+t_Y<-py$t_Y
+a_X<-py$a_X
+b_X<-py$b_X
+c_X<-py$c_X
+g_X<-py$g_X
+k_X<-py$k_X
+t_X<-py$t_X
+a_coords<-py$a_coords
+b_coords<-py$b_coords
+c_coords<-py$c_coords
+g_coords<-py$g_coords
+k_coords<-py$k_coords
+t_coords<-py$t_coords
+
+datasets<-list()
+datasets[['georgia']]   <-list(Y=g_Y,X=g_X,coords=g_coords)
+datasets[['tokio']]     <-list(Y=t_Y,X=t_X,coords=t_coords)
+datasets[['king_house']]<-list(Y=k_Y,X=k_X,coords=k_coords)
+datasets[['clearwater']]<-list(Y=c_Y,X=c_X,coords=c_coords)
+datasets[['berlin']]   <-list(Y=b_Y,X=b_X,coords=b_coords)
+datasets[['airbnb']]   <-list(Y=a_Y,X=a_X,coords=a_coords)
+datasets[['DVF']]   <-list(Y=d_Y,X=d_X,coords=d_coords,Xd=d_Xd)
+
+
+save(datasets,a_coords,a_X,a_Y,b_coords,b_X,b_Y,c_coords,c_X,c_Y,g_coords,g_X,g_Y,k_coords,k_X,k_Y,t_coords,t_X,t_Y,file='/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/alldatsets.Rdata')
+
+```
+
+```{r perfomance predictive}
+library(caret)
+library(xgboost)
+library(GWmodel)
+library(reticulate)
+use_condaenv("py3.12")
+imports<-
+"import numpy as np
+from mgwr.sel_bw import Sel_BW
+from mgwr.gwr import GWR, MGWR
+import multiprocessing as mp
+import pandas as pd
+import datetime
+import libpysal as ps
+import geopandas as gp
+import statsmodels.api as sm"
+
+py_run_string(imports)
+
+compute_MGWR=paste0("
+X=r.X_train
+y=r.Y_train
+b_coords=r.coords_train
+now = datetime.datetime.now()
+mgwr_selector = Sel_BW(b_coords, y, X, multi=True,n_jobs=8)
+mgwr_bw = mgwr_selector.search(max_iter_multi=100)
+dur_calibration=(datetime.datetime.now()-now).total_seconds()
+now = datetime.datetime.now()
+mgwr_results = MGWR(b_coords, y,X, selector=mgwr_selector,n_jobs=8).fit()
+dur_inference=(datetime.datetime.now()-now).total_seconds()
+")
+  
+
+rmse=function(x) sqrt(mean(x^2))
+
+library(mgwrsar)
+load(file='/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/alldatsets.Rdata')
+
+# N= 159, 262, 239,  2203 ,18708, 38782
+
+ datasets[['airbnb']][['X']][,6]<-as.numeric(datasets[['airbnb']][['X']][,6]>0)
+ datasets[['airbnb']][['X']][,7]<-as.numeric(datasets[['airbnb']][['X']][,7]>0)
+datasets[['airbnb']][['X']]<-datasets[['airbnb']][['X']][,1:7]
+#params :
+maxvoisin=1000
+init_model='OLS'
+verbose=F
+adaptive=T
+AICc=F
+ratio=1
+ncores=8
+nfolds = 5
+nrounds_xgb=150
+nns=30
+datasets_name<-c("georgia","tokio","clearwater", "berlin","DVF", "king_house",'airbnb')
+models_name=c('xgboost','xgboost_xy','GWR','MGWRSAR_1_0_kv_BPN','multiscale_gwr','atds_gwr','tds_mgwr','atds_mgwr')
+preds_name=c('xgboost','xgboost_xy',
+'GWR_estim','GWR_shepard','GWR_tWtp_model','GWR_model',
+'python_mgwr_estim','python_mgwr_shepard','python_mgwr_tWtp_model','python_mgwr_model',
+'MGWRSAR_1_0_kv_BPN_shepard','MGWRSAR_1_0_kv_BPN_tWtp_model','MGWRSAR_1_0_kv_BPN_model',
+'multiscale_gwr_shepard','multiscale_gwr_tWtp_model','multiscale_gwr_model',
+'tds_mgwr_shepard','tds_mgwr_tWtp_model','tds_mgwr_model',
+'atds_mgwr_shepard','atds_mgwr_tWtp_model','atds_mgwr_model',
+'atds_gwr_shepard','atds_gwr_tWtp_model','atds_gwr_model',
+'gwr.multiscale_shepard')
+
+
+models_name=c('xgboost','xgboost_xy','GWR','tds_mgwr')
+datasets_name<-c("DVF","king_house","airbnb")#,"king_house",'airbnb')
+datasets_name<-c("georgia" ,"clearwater", "tokio","berlin","DVF")# ,"king_house", "airbnb")
+
+#datasets_name='tokio'
+models_name=c('xgboost','xgboost_xy','GWR','tds_mgwr','atds_mgwr','multiscale_gwr')
+models_name=c('GWR','python_mgwr')
+
+rmse=function(x) sqrt(mean(x^2))
+mape=function(x,y) mean(abs(x/y))
+results=list()
+results_in=list()
+AICc_in=list()
+nbGWR=0
+for(d in datasets_name){
+cat('dataset = ',d,'\n')
+Y= datasets[[d]][['Y']] 
+X= datasets[[d]][['X']]
+colnames(X)=paste0('X',1:ncol(X))
+myformula=as.formula(paste0('Y~',paste0(colnames(X),collapse = '+')))
+coords= as.matrix(datasets[[d]][['coords']])
+data=data.frame(Y=Y,X)
+set.seed(12345)
+folds = createFolds(data$Y, k = nfolds, list = TRUE, returnTrain = FALSE)
+if(nrow(data)>5000) AICc=FALSE else  AICc=TRUE
+index=1:nrow(coords)
+preds=matrix(NA,ncol=length(preds_name)+1,nrow=length(index))
+colnames(preds)=c('Y',preds_name)
+insample=matrix(NA,ncol=length(models_name),nrow=nfolds)
+
+colnames(insample)=models_name
+aic_in=matrix(NA,ncol=length(models_name),nrow=nfolds)
+colnames(aic_in)=models_name
+
+colnames(coords)=c('x','y')
+ncolX=ncol(X)
+preds[,'Y']<-Y
+cat('fold = ')
+for(i in 1:nfolds){
+  gc()
+  cat(' ',i,'\n')
+  start<-proc.time()
+    folds_i <- folds[[i]]
+    index_in=index[-folds_i]
+    index_out=index[folds_i]
+    data_train=data[index_in,]
+    data_test=data[index_out,]
+    X_train=X[index_in,]
+    X_test=X[index_out,]
+    Y_train=Y[index_in]
+    Y_test=Y[index_out]
+    coords_train=coords[index_in,]
+    coords_test=coords[index_out,]
+     if('GWR' %in% models_name){
+      cat(' GWR')
+       res=golden_search_bandwidth(formula=myformula,H2=NULL,data = data_train,coord=as.matrix(coords_train), fixed_vars=NULL,kernels=c('bisq'), Model = 'GWR',control=list(verbose=verbose,NN=min(nrow(data_train),maxvoisin),criterion='AICc',adaptive=T,doMC=T,ncore=ncores),lower.bound=2, upper.bound=min(nrow(data_train),maxvoisin),tolerance=0.001)
+   model_GWR<- res$model
+   insample[i,'GWR']<-model_GWR@RMSE
+    aic_in[i,'GWR']<-model_GWR@AICc
+   #model_GWR@H=round(model_GWR@H*ratio)
+   cat('H= ',model_GWR@H, ' ')
+   preds[index_out,'GWR_estim']<- predict(model_GWR,newdata=data_test,newdata_coord=coords_test)
+   preds[index_out,'GWR_shepard']<- predict(model_GWR,newdata=data_test,newdata_coord=coords_test,method_pred='shepard',k_extra=6)
+   preds[index_out,'GWR_tWtp_model']<- predict(model_GWR,newdata=data_test,newdata_coord=coords_test,method_pred='tWtp_model')
+   model_GWR@H=round(res$model@H/ratio)
+   model_GWR@kernels='gauss'
+   model_GWR@adaptive=TRUE
+   model_GWR@Model='GWR'
+   model_GWR@H=3
+   preds[index_out,'GWR_model']<- predict(model_GWR,newdata=data_test,newdata_coord=coords_test,method_pred='model')
+   cat(" rmse estim =", rmse(preds[index_out,'Y']-preds[index_out,'GWR_estim']),"\n")
+   cat(" rmse model=", rmse(preds[index_out,'Y']-preds[index_out,'GWR_model']),"\n")
+    }
+    cat('\n time =',  (proc.time()-start)[3],'\n')
+    
+    if('python_mgwr' %in% models_name){
+      cat('python_mgwr')
+    Y_train=as.matrix(Y_train,ncol=1)
+    py_run_string(compute_MGWR);py$dur_calibration;py$dur_inference;
+    res_mgwr=py$mgwr_results
+    model_GWR@Betav<- res_mgwr$params
+    
+    insample[i,'python_mgwr']<-sqrt(mean(res_mgwr$resid_response^2))
+    aic_in[i,'python_mgwr']<-res_mgwr$aicc
+   #model_GWR@H=round(model_GWR@H*ratio)
+   cat('H= ',py$mgwr_bw, ' ')
+   
+   preds[index_out,'python_mgwr_estim']<- NA
+   preds[index_out,'python_mgwr_shepard']<-NA
+   preds[index_out,'python_mgwr_tWtp_model']<-NA
+   model_GWR@kernels='gauss'
+   model_GWR@adaptive=TRUE
+   model_GWR@Model='GWR'
+   model_GWR@H=3
+   preds[index_out,'python_mgwr_model']<- predict(model_GWR,newdata=data_test,newdata_coord=coords_test,method_pred='model')
+   cat(" rmse estim =", rmse(preds[index_out,'Y']-preds[index_out,'python_mgwr_estim']),"\n")
+   cat(" rmse model=", rmse(preds[index_out,'Y']-preds[index_out,'python_mgwr_model']),"\n")
+    }
+    cat('\n time =',  (proc.time()-start)[3],'\n')
+    
+    
+   
+    if('MGWRSAR_1_0_kv' %in% models_name){
+      cat(' MGWRSAR_1_0_kv')
+       W_in_out=kernel_matW(H=4,kernels='triangle',coords=as.matrix(rbind(coords_train,coords_test)),NN=8,adaptive=TRUE,diagnull=TRUE)
+       W_in=kernel_matW(H=4,kernels='triangle',coords=as.matrix(coords_train),NN=4,adaptive=TRUE,diagnull=TRUE)
+       res=golden_search_bandwidth(formula=myformula,H2=NULL,data = data_train,coord=as.matrix(coords_train), fixed_vars=NULL,kernels=c('gauss'), Model = 'MGWRSAR_1_0_kv',control=list(W=W_in,verbose=verbose,NN=min(nrow(data_train),maxvoisin),criterion='CV',adaptive=T,doMC=T,ncore=8),lower.bound=2, upper.bound=min(nrow(data_train),maxvoisin),tolerance=0.001)
+   model_MGWRSAR_1_0_kv<- res$model
+    insample[i,'MGWRSAR_1_0_kv']<-model_MGWRSAR_1_0_kv@RMSE
+   preds[index_out,'MGWRSAR_1_0_kv_BPN_shepard']<- predict(model_MGWRSAR_1_0_kv,newdata=data_test,newdata_coord=coords_test,W=W_in_out,Type='BPN',method='shepard')
+    preds[index_out,'MGWRSAR_1_0_kv_BPN_tWtp_model']<- predict(model_MGWRSAR_1_0_kv,newdata=data_test,newdata_coord=coords_test,W=W_in_out,Type='BPN',method='tWtp_model')
+   preds[index_out,'MGWRSAR_1_0_kv_BPN_model']<- predict(model_MGWRSAR_1_0_kv,newdata=data_test,newdata_coord=coords_test,W=W_in_out,Type='BPN',method='model')
+   rmse(preds[index_out,'Y']-preds[index_out,'atds_gwr_tWtp_model'])
+
+    }
+       if('atds_gwr' %in% models_name){
+            cat(' atds_gwr')
+        model_atds_gwr= atds_gwr(formula=myformula,data=data_train,coords=as.matrix(coords_train),kernels='gauss',fixed_vars=NULL,control_tds=list(nns=nns,first_nn=NULL,V=NULL,minv=NULL,BETA=NULL,TRUEBETA=NULL, H=NULL,verbose=verbose,G=NULL,browser=-1,doMC=FALSE,ncore=1,ALLV=F,tol=0.0001,model_stage1=NULL,tSapprox=FALSE,test=TRUE,get_AIC=T),control=list(adaptive=adaptive,verbose=FALSE,NN=nrow(data_train),doMC=T,ncore=ncores))
+       insample[i,'atds_gwr']<-model_atds_gwr@RMSE
+      aic_in[i,'atds_gwr']<-model_atds_gwr@AICc
+
+   preds[index_out,'atds_gwr_shepard']<- predict(model_atds_gwr, newdata=data_test, newdata_coords=coords_test,method='shepard',k_extra=6)
+   preds[index_out,'atds_gwr_tWtp_model']<- predict(model_atds_gwr, newdata=data_test, newdata_coords=coords_test,method='tWtp_model')
+   model_atds_gwr@kernels='gauss'
+   model_atds_gwr@adaptive=TRUE
+   model_atds_gwr@Model='GWR'
+   model_atds_gwr@H=3
+   preds[index_out,'atds_gwr_model']<- predict(model_atds_gwr, newdata=data_test, newdata_coords=coords_test,method='model',k_extra=6)
+      cat(" rmse model=", rmse(preds[index_out,'Y']-preds[index_out,'atds_gwr_model']),"\n")
+       }
+       # cat('\n time =',  (proc.time()-start)[3],'\n')
+
+    if('tds_mgwr' %in% models_name){
+            cat(' tds_mgwr')
+       mymodel<-model_tds_mgwr <- tds_mgwr(formula=myformula,data=data_train,coords=as.matrix(coords_train),Model='tds_mgwr',kernels='gauss',fixed_vars=NULL,control_tds=list(nns=nns,first_nn=nrow(data_train),V=NULL,minv=NULL,BETA=NULL,TRUEBETA=NULL, H=NULL,verbose=verbose,G=NULL,browser=-1,doMC=F,ncore=1,ALLV=F,tol=0.00001,nrounds=1,model_stage1=NULL,tSapprox=FALSE,get_AIC=AICc,init_model=init_model),control=list(NN=min(nrow(data_train),maxvoisin),adaptive=adaptive,verbose=FALSE,isgcv =FALSE,Type ='GD',doMC=T,ncore=ncores))
+      insample[i,'tds_mgwr']<-model_tds_mgwr@RMSE
+      if(AICc) aic_in[i,'tds_mgwr']<-model_tds_mgwr@AICc
+   preds[index_out,'tds_mgwr_shepard']<- predict(model_tds_mgwr, newdata=data_test, newdata_coords=coords_test,method='shepard',k_extra=6)
+   preds[index_out,'tds_mgwr_tWtp_model']<- predict(model_tds_mgwr, newdata=data_test, newdata_coords=coords_test,method='tWtp_model',k_extra=8)
+   mymodel@kernels='gauss'
+   mymodel@adaptive=TRUE
+   mymodel@Model='GWR'
+   mymodel@H=3
+   preds[index_out,'tds_mgwr_model']<- predict(mymodel, newdata=data_test, newdata_coords=coords_test,method='model',k_extra=6)
+   cat(" rmse=",rmse(preds[index_out,'Y']-preds[index_out,'tds_mgwr_shepard']),"\n")
+   cat(" rmse model=",rmse(preds[index_out,'Y']-preds[index_out,'tds_mgwr_model']),"\n")
+    }
+       #     cat('\n time =',  (proc.time()-start)[3],'\n')
+
+if('atds_mgwr' %in% models_name  & AICc){
+            cat(' atds_mgwr')
+      model_atds_mgwr <- tds_mgwr(formula=myformula,data=data_train,coords=as.matrix(coords_train),Model='atds_mgwr',kernels='gauss',fixed_vars=NULL,control_tds=list(nns=nns,first_nn=nrow(data_train),V=NULL,minv=NULL,BETA=NULL,TRUEBETA=NULL, H=NULL,verbose=verbose,G=NULL,browser=-1,doMC=F,ncore=1,ALLV=F,tol=0.00001,nrounds=1,model_stage1=model_tds_mgwr,tSapprox=FALSE,get_AIC=T),control=list(NN=min(nrow(data_train),maxvoisin),adaptive=adaptive,verbose=FALSE,isgcv =FALSE,Type ='GD',doMC=T,ncore=ncores))
+   insample[i,'atds_mgwr']<-model_atds_mgwr@RMSE
+   if(AICc) aic_in[i,'atds_mgwr']<-model_atds_mgwr@AICc
+   preds[index_out,'atds_mgwr_shepard']<- predict(model_atds_mgwr, newdata=data_test, newdata_coords=coords_test,method='shepard',k_extra=8)
+   preds[index_out,'atds_mgwr_tWtp_model']<- predict(model_atds_mgwr, newdata=data_test, newdata_coords=coords_test,method='tWtp_model',k_extra=8)
+   model_atds_mgwr@kernels='gauss'
+   model_atds_mgwr@adaptive=TRUE
+   model_atds_mgwr@Model='GWR'
+   model_atds_mgwr@H=3
+   preds[index_out,'atds_mgwr_model']<- predict(model_atds_mgwr, newdata=data_test, newdata_coords=coords_test,method='model',k_extra=8)
+   cat(" rmse=",rmse(preds[index_out,'Y']-preds[index_out,'atds_mgwr_shepard']),"\n")
+
+    }
+              #  cat('\n time =',  (proc.time()-start)[3],'\n')
+
+     if('gwr.multiscale' %in% models_name){
+    cat(' gwr.multiscale')
+    data_trainSF=SpatialPointsDataFrame(coords_train, data_train)
+    ddist <- gw.dist(coords_train)
+    kk=ncol(X_train)+1
+    DM=list()
+    for(z in 1:kk) DM[[z]]=ddist
+    res1<-gwr.multiscale(myformula, data=data_trainSF, criterion="dCVR",kernel="gaussian", adaptive=T, bws0=rep(100,kk),bw.seled=rep(T, kk),var.dMat.indx= 1:kk, dMats=DM,threshold =1e-05,max.iterations = 200)
+     model_gwr.multiscale<-model_tds_mgwr
+     model_gwr.multiscale@Betav=as.matrix(res1$SDF@data[,1:kk])
+     
+      model_gwr.multiscale@kernels='gauss'
+   model_gwr.multiscale@adaptive=TRUE
+   model_gwr.multiscale@Model='GWR'
+   model_gwr.multiscale@H=3
+   preds[index_out,'gwr.multiscale_shepard']<- predict(model_gwr.multiscale, newdata=data_test, newdata_coords=coords_test,method='model',k_extra=8)
+   cat(" rmse=",rmse(preds[index_out,'Y']-preds[index_out,'gwr.multiscale_shepard']),"\n")
+  
+     }
+    if('multiscale_gwr' %in% models_name & AICc ){
+    cat(' multiscale_gwr')
+     model_multiscale_gwr <-  multiscale_gwr(formula=myformula,data=data_train,coords=as.matrix(coords_train),kernels='gauss',verbose=verbose,get_AICg=T,control=list(SE=F,adaptive=T,NN=min(nrow(data_train),maxvoisin),isgcv=FALSE,verbose=F,family=gaussian(),doMC=T, ncore=ncores),init='GWR',nstable=5,tolerance =0.0001)
+    #model_multiscale_gwr@Betav<-model_multiscale_gwr@Betav[,-ncol(model_multiscale_gwr@Betav)]
+   if(AICc) aic_in[i,'multiscale_gwr']<-model_multiscale_gwr@AICc
+   insample[i,'multiscale_gwr']<-model_multiscale_gwr@RMSE
+    model_multiscale_gwr@XV=model_multiscale_gwr@X
+   model_multiscale_gwr@kernels='gauss'
+   model_multiscale_gwr@adaptive=TRUE
+   model_multiscale_gwr@Model='GWR'
+   model_multiscale_gwr@H=3
+   preds[index_out,'multiscale_gwr_model']<- predict(model_multiscale_gwr, newdata=data_test, newdata_coords=coords_test,method='model')
+   cat(" rmse=",rmse(preds[index_out,'Y']-preds[index_out,'multiscale_gwr_model']),"\n")
+     }
+
+     #   cat('\n time =',  (proc.time()-start)[3],'\n')
+
+    if('xgboost' %in% models_name){
+    cat(' xgboost')
+    train = xgb.DMatrix(data = data.matrix(X_train), label = Y_train)
+    test <- xgb.DMatrix(data = data.matrix(X_test) , label = Y_test)
+    xgb_cv <- xgb.cv(data = train,nthread = ncores,nrounds = nrounds_xgb, maximize = FALSE,nfold = nfolds,early_stopping_rounds = 3, verbose =F)
+    model_xgboost = xgb.train(data = train,nrounds = xgb_cv$best_iteration, verbose =verbose)
+    preds[index_out,'xgboost']<- predict(model_xgboost,test)
+    cat(" rmse=", rmse(preds[index_out,'Y']-preds[index_out,'xgboost']),"\n")
+    }
+    if('xgboost_xy' %in% models_name){
+    cat(' xgboost_xy \n')
+    train = xgb.DMatrix(data = data.matrix(X_train,coords_train), label = Y_train)
+    test <- xgb.DMatrix(data = data.matrix(X_test,coords_test) , label = Y_test)
+    xgb_cv <- xgb.cv(data = train,nthread = ncores,nrounds = nrounds_xgb, maximize = FALSE,nfold = nfolds,early_stopping_rounds = 3, verbose =F)
+    model_xgboost_xy = xgb.train(data = train,nrounds = xgb_cv$best_iteration, verbose =verbose)
+    preds[index_out,'xgboost_xy']<- predict(model_xgboost_xy,test)
+    cat(" rmse=", rmse(preds[index_out,'Y']-preds[index_out,'xgboost_xy']),"\n")
+
+    }
+        
+}
+
+
+rmse_by_model=apply(preds[,-1],2,function(x) rmse(Y-x))
+cat('\n',preds_name,'\n')
+cat(rmse_by_model,'\n')
+results[[d]]<-preds
+results_in[[d]]<-insample
+AICc_in[[d]]<-aic_in
+
+}
+
+preds=(results$DVF)
+RMSE=results_in$DVF
+AICc=AICc_in$DVF
+#cat(" rmse model=", rmse(preds[,'Y']-preds[,'GWR_model']),"\n")
+cat(" rmse model=", rmse(preds[,'Y']-preds[,'python_mgwr_model']),"\n")
+apply(RMSE,2,mean)
+apply(AICc,2,mean)
+
+save(results,results_in,AICc_in,file='/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/results_python_DVF.Rdata')
+
+save(results,results_in,AICc_in,file='/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/results_all.Rdata')
+
+#### RELANCER  pour multiscale_gwr georgia, clearwater , berlin
+
+
+length(nchar(readLines("/Users/geniaux/Documents/Boulot/programme/mgwrsar2/simu_tds/result_final/TAB_9/GWRDVF.txt", encoding = "UTF-8")))-1
+
+####  RELANCER DVF AVEC AICC TRUE pour tous les model sauf GWR
+
+
+#### analyse result
+d=datasets_name[1]
+Y=results[[d]][,1]
+RES=results[[d]][,-1]
+apply(RES[,],2,function(x) rmse(Y-x))
+
+
+for(d in datasets_name) {
+Y=results[[d]][,1]
+RES=results[[d]][,-1]
+cat(d,' ',round(apply(RES[,c('GWR_estim','multiscale_gwr_model','tds_mgwr_model','atds_mgwr_model')],2,function(x) rmse(Y-x)),digits=3))#
+}
+
+for(d in datasets_name) cat(d,' ',round(apply(results_in[[d]][,models_name],2,mean),digits=3))
+
+for(d in datasets_name) cat(d,' ',round(apply(AICc_in[[d]][,models_name],2,mean),digits=3))
+
+
+save(results,results_in,AICc_in,file='/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/results_4petits.Rdata')
+
+save(results,results_in,AICc_in,file='/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/results_all.Rdata')
+
+save(results,results_in,AICc_in,file='/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/results_3gros.Rdata')
+load(file='/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/results1.Rdata')
+```
+
