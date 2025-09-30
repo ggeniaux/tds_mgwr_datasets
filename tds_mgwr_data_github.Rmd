@@ -1,29 +1,30 @@
 ---
-title: "datasets for article : Top-Down Scale Approaches for Multiscale GWR with Locally Adaptive Bandwidths"
+title: "datasets for article : Geniaux(2025) Top-Down Scale Approaches for Multiscale GWR with Locally Adaptive Bandwidths"
 author: "Ghislain Geniaux"
-date: "2025-30-09"
+date: "2025-09-30"
 output: html_document
 ---
 
-First, Intall R, Rstudio and Python if necessary
 
-Then, using a terminal console, install this environement and libraries : 
-
-conda create  --name py3.12 python=3.12
-conda install --name py3.12 pandas
-conda install --name py3.12 numpy
-conda install --name py3.12 geopandas
-conda install --name py3.12 pysal
-conda install --name py3.12 libpysal
-conda install --name py3.12 mgwr
-
-Theses series of python and R chunk allow to download data from PYSAL. 
+Theses series of python and R chunks allow to download data from PYSAL and from github.
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(reticulate)
+required_packages <- c("caret", "xgboost", "GWmodel", "reticulate", "mgwrsar","dplyr",)
+
+# Install any missing packages
+installed_packages <- rownames(installed.packages())
+for (pkg in required_packages) {
+  if (!(pkg %in% installed_packages)) {
+    install.packages(pkg, dependencies = TRUE)
+  }
+}
+
+# Load the packages
+lapply(required_packages, library, character.only = TRUE)
+
 use_condaenv("py3.12")
-library(dplyr)
+
 ```
 
 ```{python}
@@ -44,7 +45,7 @@ prenz = gpd.read_file(lps.examples.get_path('prenzlauer.zip'))
 
 ```{python berlin}
 explain('berlin')
-prenz = pd.read_csv('/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/prenzlauer.csv')
+prenz = pd.read_csv('prenzlauer.csv')
 b_y = np.log(prenz['price'].values.astype(float).reshape((-1, 1)))
 b_X = prenz[['review_scores_rating','bedrooms','bathrooms','beds','accommodates']].values.astype(float) 
 b_X = (b_X - b_X.mean(axis=0)) / b_X.std(axis=0)
@@ -85,7 +86,7 @@ t_Y = (t_Y-t_Y.mean(axis=0))/t_Y.std(axis=0)
 ```
 
 ```{python kc_house_data.csv}
-data = pd.read_csv("/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/kc_house_data.csv")
+data = pd.read_csv("kc_house_data.csv")
 data = data[data["yr_renovated"] == 0]
 data = data[data["waterfront"] == 0]
 data = data[data["view"] < 1]
@@ -111,7 +112,7 @@ k_Y = (k_Y-k_Y.mean(axis=0))/k_Y.std(axis=0)
 ```
 
 ```{python airbnb}
-airbnb = pd.read_csv("/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/AB_NYC_2019.csv")
+airbnb = pd.read_csv("AB_NYC_2019.csv")
 print(airbnb.shape, airbnb.keys())
 airbnb.drop(['name', 'host_id', 'id', 'neighbourhood_group', 'neighbourhood', 'host_name', 'last_review'], axis=1, inplace=True)
 categories = airbnb.keys()
@@ -182,15 +183,17 @@ datasets[['airbnb']]   <-list(Y=a_Y,X=a_X,coords=a_coords)
 datasets[['DVF']]   <-list(Y=d_Y,X=d_X,coords=d_coords,Xd=d_Xd)
 
 
-save(datasets,a_coords,a_X,a_Y,b_coords,b_X,b_Y,c_coords,c_X,c_Y,g_coords,g_X,g_Y,k_coords,k_X,k_Y,t_coords,t_X,t_Y,file='/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/alldatsets.Rdata')
+save(datasets,a_coords,a_X,a_Y,b_coords,b_X,b_Y,c_coords,c_X,c_Y,g_coords,g_X,g_Y,k_coords,k_X,k_Y,t_coords,t_X,t_Y,file='alldatsets.Rdata')
 
 ```
 
-```{r perfomance predictive}
-library(caret)
-library(xgboost)
-library(GWmodel)
-library(reticulate)
+
+This R code chunk compares out-of-sample predictions across all datasets  
+(*georgia*, *clearwater*, *tokio*, *berlin*, *DVF*, *king_house*, *airbnb*)  
+using seven estimators (*xgboost*, *xgboost_xy*, *GWR*, *tds_mgwr*, *atds_mgwr*, *multiscale_gwr*, *python_mgwr*) evaluated with 5-fold cross-validation.
+
+```{r compares out-of-sample predictions across all datasets}
+
 use_condaenv("py3.12")
 imports<-
 "import numpy as np
@@ -222,7 +225,7 @@ dur_inference=(datetime.datetime.now()-now).total_seconds()
 rmse=function(x) sqrt(mean(x^2))
 
 library(mgwrsar)
-load(file='/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/alldatsets.Rdata')
+load(file='alldatsets.Rdata')
 
 # N= 159, 262, 239,  2203 ,18708, 38782
 
@@ -253,13 +256,8 @@ preds_name=c('xgboost','xgboost_xy',
 'gwr.multiscale_shepard')
 
 
-models_name=c('xgboost','xgboost_xy','GWR','tds_mgwr')
-datasets_name<-c("DVF","king_house","airbnb")#,"king_house",'airbnb')
-datasets_name<-c("georgia" ,"clearwater", "tokio","berlin","DVF")# ,"king_house", "airbnb")
-
-#datasets_name='tokio'
-models_name=c('xgboost','xgboost_xy','GWR','tds_mgwr','atds_mgwr','multiscale_gwr')
-models_name=c('GWR','python_mgwr')
+datasets_name<-c("georgia" ,"clearwater", "tokio","berlin","DVF" ,"king_house", "airbnb")
+models_name=c('xgboost','xgboost_xy','GWR','tds_mgwr','atds_mgwr','multiscale_gwr','python_mgwr')
 
 rmse=function(x) sqrt(mean(x^2))
 mape=function(x,y) mean(abs(x/y))
@@ -352,7 +350,6 @@ for(i in 1:nfolds){
    cat(" rmse model=", rmse(preds[index_out,'Y']-preds[index_out,'python_mgwr_model']),"\n")
     }
     cat('\n time =',  (proc.time()-start)[3],'\n')
-    
     
    
     if('MGWRSAR_1_0_kv' %in% models_name){
@@ -472,11 +469,8 @@ if('atds_mgwr' %in% models_name  & AICc){
     model_xgboost_xy = xgb.train(data = train,nrounds = xgb_cv$best_iteration, verbose =verbose)
     preds[index_out,'xgboost_xy']<- predict(model_xgboost_xy,test)
     cat(" rmse=", rmse(preds[index_out,'Y']-preds[index_out,'xgboost_xy']),"\n")
-
     }
-        
 }
-
 
 rmse_by_model=apply(preds[,-1],2,function(x) rmse(Y-x))
 cat('\n',preds_name,'\n')
@@ -490,46 +484,10 @@ AICc_in[[d]]<-aic_in
 preds=(results$DVF)
 RMSE=results_in$DVF
 AICc=AICc_in$DVF
-#cat(" rmse model=", rmse(preds[,'Y']-preds[,'GWR_model']),"\n")
 cat(" rmse model=", rmse(preds[,'Y']-preds[,'python_mgwr_model']),"\n")
 apply(RMSE,2,mean)
 apply(AICc,2,mean)
 
-save(results,results_in,AICc_in,file='/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/results_python_DVF.Rdata')
 
-save(results,results_in,AICc_in,file='/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/results_all.Rdata')
-
-#### RELANCER  pour multiscale_gwr georgia, clearwater , berlin
-
-
-length(nchar(readLines("/Users/geniaux/Documents/Boulot/programme/mgwrsar2/simu_tds/result_final/TAB_9/GWRDVF.txt", encoding = "UTF-8")))-1
-
-####  RELANCER DVF AVEC AICC TRUE pour tous les model sauf GWR
-
-
-#### analyse result
-d=datasets_name[1]
-Y=results[[d]][,1]
-RES=results[[d]][,-1]
-apply(RES[,],2,function(x) rmse(Y-x))
-
-
-for(d in datasets_name) {
-Y=results[[d]][,1]
-RES=results[[d]][,-1]
-cat(d,' ',round(apply(RES[,c('GWR_estim','multiscale_gwr_model','tds_mgwr_model','atds_mgwr_model')],2,function(x) rmse(Y-x)),digits=3))#
-}
-
-for(d in datasets_name) cat(d,' ',round(apply(results_in[[d]][,models_name],2,mean),digits=3))
-
-for(d in datasets_name) cat(d,' ',round(apply(AICc_in[[d]][,models_name],2,mean),digits=3))
-
-
-save(results,results_in,AICc_in,file='/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/results_4petits.Rdata')
-
-save(results,results_in,AICc_in,file='/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/results_all.Rdata')
-
-save(results,results_in,AICc_in,file='/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/results_3gros.Rdata')
-load(file='/Users/geniaux/Documents/Boulot/programme/mgwrsar2/MGWR_DATA_EXAMPLE/results1.Rdata')
 ```
 
