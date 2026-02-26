@@ -2,7 +2,7 @@
 
 This repository provides access to the **real-world dataset** used in:  
 
-> Geniaux (2025), *Top-Down Scale Approaches for Multiscale GWR with Locally Adaptive Bandwidths*  
+> Geniaux (2026), *Top-Down Scale Approaches for Multiscale GWR with Locally Adaptive Bandwidths*, JGSY  
 
 It includes an R Markdown file: **`tds_mgwr_data_github.Rmd`**, which:  
 - Downloads the dataset from the [PySAL library](https://pysal.org/) website.  
